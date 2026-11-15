@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:proyecto_flutter/config/router.dart';
-import 'package:proyecto_flutter/services/auth_service.dart';
-import 'package:proyecto_flutter/utils/validators.dart';
-import 'package:proyecto_flutter/widgets/app_primary_button.dart';
-import 'package:proyecto_flutter/widgets/app_text_field.dart';
 
-/// Pantalla de inicio de sesión.
-///
-/// Es un StatefulWidget porque necesita guardar estado:
-/// los controladores de los campos y si está cargando.
+import '../config/router.dart';
+import '../services/auth_service.dart';
+import '../utils/validators.dart';
+import '../widgets/app_primary_button.dart';
+import '../widgets/app_text_field.dart';
+import '../widgets/auth_header.dart';
+
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -18,148 +16,119 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  /// Key del formulario: permite validar todos los campos desde el botón.
   final _formKey = GlobalKey<FormState>();
-
-  /// Controladores: guardan lo que el usuario escribe.
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-
-  /// Bandera de carga: true mientras se espera respuesta del "servidor".
+  final _auth = AuthService.instance;
   bool _loading = false;
 
   @override
   void dispose() {
-    // Liberar los controladores cuando la vista se cierra.
     _emailCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
   }
 
-  /// Se ejecuta al pulsar "Iniciar sesión".
+  void _message(String text) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+  }
+
   Future<void> _submit() async {
-    // 1. Validar el formulario. Si hay errores, no seguimos.
+    FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
-
-    // 2. Activar el estado de carga.
     setState(() => _loading = true);
-
-    // 3. Llamar al servicio (simula petición al backend).
-    final ok = await AuthService.instance.login(
-      _emailCtrl.text,
-      _passCtrl.text,
-    );
-
-    // 4. Verificar que la pantalla siga montada antes de usar context.
-    if (!mounted) return;
-
-    // 5. Desactivar la carga.
-    setState(() => _loading = false);
-
-    // 6. Redirigir o mostrar error.
-    if (ok) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Bienvenido, ${_emailCtrl.text}')));
-      context.go(AppRoutes.home);
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Credenciales inválidas')));
+    try {
+      await _auth.ingresar(_emailCtrl.text, _passCtrl.text);
+      // No hace falta navegar: el router detecta la sesión y abre /home.
+    } catch (e) {
+      if (mounted) _message(_auth.mensajeError(e));
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Abre la pantalla de recuperación llevando el correo que ya se escribió.
+  void _forgotPassword() {
+    final email = _emailCtrl.text.trim();
+    final query = email.isEmpty ? '' : '?email=${Uri.encodeQueryComponent(email)}';
+    context.push('${AppRoutes.forgotPassword}$query');
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // ---------- LOGO ----------
-                  Center(
-                    child: Container(
-                      width: 96,
-                      height: 96,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
-                        borderRadius: BorderRadius.circular(24),
+      body: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        child: Column(
+          children: [
+            const AuthHeader(
+              title: 'Bienvenido a InverApp',
+              subtitle: 'Aprende e invierte en un solo lugar.',
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AppTextField(
+                      label: 'Correo',
+                      icon: Icons.mail_outline,
+                      controller: _emailCtrl,
+                      validator: Validators.email,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.email],
+                    ),
+                    const SizedBox(height: 16),
+                    AppTextField(
+                      label: 'Contraseña',
+                      icon: Icons.lock_outline,
+                      controller: _passCtrl,
+                      validator: Validators.password,
+                      obscureText: true,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _submit(),
+                      autofillHints: const [AutofillHints.password],
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _forgotPassword,
+                        child: const Text('¿Olvidaste tu contraseña?'),
                       ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Image.asset(
-                        'assets/images/logo.png',
-                        fit: BoxFit.cover,
-                        // Si no encuentra el logo, muestra un ícono.
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.trending_up,
-                          size: 52,
-                          color: Colors.white,
+                    ),
+                    const SizedBox(height: 8),
+                    AppPrimaryButton(
+                      label: 'Iniciar sesión',
+                      isLoading: _loading,
+                      onPressed: _submit,
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '¿No tienes cuenta?',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
-                      ),
+                        TextButton(
+                          onPressed: () => context.push(AppRoutes.register),
+                          child: const Text('Crear cuenta'),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // ---------- TÍTULOS ----------
-                  Text(
-                    'Bienvenido',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Inicia sesión con tu cuenta',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 28),
-
-                  // ---------- CAMPOS ----------
-                  AppTextField(
-                    controller: _emailCtrl,
-                    label: 'Correo electrónico',
-                    hint: 'nombre@correo.com',
-                    icon: Icons.email_outlined,
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    validator: Validators.email,
-                  ),
-                  const SizedBox(height: 16),
-
-                  AppTextField(
-                    controller: _passCtrl,
-                    label: 'Contraseña',
-                    icon: Icons.lock_outline,
-                    obscureText: true,
-                    textInputAction: TextInputAction.done,
-                    validator: Validators.password,
-                  ),
-                  const SizedBox(height: 24),
-
-                  // ---------- BOTÓN ----------
-                  AppPrimaryButton(
-                    label: 'Iniciar sesión',
-                    isLoading: _loading,
-                    onPressed: _submit,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ---------- LINK A REGISTRO ----------
-                  TextButton(
-                    onPressed: () => context.push(AppRoutes.register),
-                    child: const Text('¿No tienes cuenta? Regístrate'),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );

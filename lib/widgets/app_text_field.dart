@@ -1,69 +1,83 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-/// Campo de texto reutilizable para toda la app.
-///
-/// Envuelve un [TextFormField] con una decoración consistente:
-/// etiqueta, hint, ícono y borde. Todos los parámetros son opcionales
-/// excepto [label], para que se pueda adaptar a distintos formularios
-/// (login, registro, etc.).
-///
-/// Es un [StatelessWidget] porque no guarda estado propio:
-/// todo lo que muestra le llega por parámetros.
-class AppTextField extends StatelessWidget {
+/// Campo de texto de la app: relleno suave, bordes redondeados, ícono inicial
+/// opcional y botón para mostrar/ocultar cuando es una contraseña.
+class AppTextField extends StatefulWidget {
   const AppTextField({
     super.key,
     required this.label,
     this.controller,
     this.validator,
-    this.hint,
-    this.icon,
-    this.keyboardType,
-    this.textInputAction,
     this.obscureText = false,
-    this.maxLines = 1,
+    this.keyboardType,
+    this.icon,
+    this.hint,
+    this.textInputAction,
+    this.onSubmitted,
+    this.autofillHints,
+    this.inputFormatters,
   });
 
-  /// Texto que se muestra como etiqueta del campo.
   final String label;
-
-  /// Controlador externo que guarda lo que escribe el usuario.
   final TextEditingController? controller;
-
-  /// Función de validación. Devuelve null si es válido.
   final String? Function(String?)? validator;
-
-  /// Texto de ayuda dentro del campo (ej: "nombre@correo.com").
-  final String? hint;
-
-  /// Ícono que se muestra a la izquierda.
-  final IconData? icon;
-
-  /// Tipo de teclado (email, número, texto, etc.).
-  final TextInputType? keyboardType;
-
-  /// Qué hace la tecla "Enter" del teclado móvil.
-  final TextInputAction? textInputAction;
-
-  /// Si es true, oculta el texto (para contraseñas).
   final bool obscureText;
+  final TextInputType? keyboardType;
+  final IconData? icon;
+  final String? hint;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+  final Iterable<String>? autofillHints;
+  final List<TextInputFormatter>? inputFormatters;
 
-  /// Número máximo de líneas visibles.
-  final int maxLines;
+  @override
+  State<AppTextField> createState() => _AppTextFieldState();
+}
+
+class _AppTextFieldState extends State<AppTextField> {
+  bool _hidden = true;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    OutlineInputBorder border(Color color, [double width = 1]) =>
+        OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: color, width: width),
+        );
+
     return TextFormField(
-      controller: controller,
-      validator: validator,
-      keyboardType: keyboardType,
-      textInputAction: textInputAction,
-      obscureText: obscureText,
-      maxLines: maxLines,
+      controller: widget.controller,
+      validator: widget.validator,
+      obscureText: widget.obscureText && _hidden,
+      keyboardType: widget.keyboardType,
+      textInputAction: widget.textInputAction,
+      onFieldSubmitted: widget.onSubmitted,
+      autofillHints: widget.autofillHints,
+      inputFormatters: widget.inputFormatters,
       decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: icon != null ? Icon(icon) : null,
-        border: const OutlineInputBorder(),
+        labelText: widget.label,
+        hintText: widget.hint,
+        filled: true,
+        fillColor: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        prefixIcon: widget.icon == null ? null : Icon(widget.icon),
+        suffixIcon: widget.obscureText
+            ? IconButton(
+                tooltip: _hidden ? 'Mostrar contraseña' : 'Ocultar contraseña',
+                icon: Icon(
+                  _hidden
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+                onPressed: () => setState(() => _hidden = !_hidden),
+              )
+            : null,
+        border: border(Colors.transparent),
+        enabledBorder: border(Colors.transparent),
+        focusedBorder: border(scheme.primary, 1.8),
+        errorBorder: border(scheme.error),
+        focusedErrorBorder: border(scheme.error, 1.8),
       ),
     );
   }

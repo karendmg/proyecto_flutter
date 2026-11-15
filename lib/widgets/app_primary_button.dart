@@ -1,60 +1,54 @@
 import 'package:flutter/material.dart';
 
-/// Botón principal de la app.
+/// Botón principal de la app: ancho completo, 52 px de alto, esquinas
+/// redondeadas y spinner opcional ([isLoading]).
 ///
-/// Envuelve un [FilledButton] con:
-///   - ancho completo (ocupa todo el ancho disponible),
-///   - bordes redondeados,
-///   - altura fija cómoda para el dedo,
-///   - indicador de carga opcional ([isLoading]).
-///
-/// Cuando [isLoading] es true, el botón:
-///   - se deshabilita (no se puede pulsar de nuevo),
-///   - muestra un spinner en lugar del texto.
-///
-/// Esto evita envíos dobles: por ejemplo, si el usuario pulsa "Iniciar sesión"
-/// varias veces mientras el backend responde.
+/// Mientras carga, ignora los toques (evita envíos dobles) pero mantiene el
+/// color del botón para que el spinner se vea bien.
 class AppPrimaryButton extends StatelessWidget {
   const AppPrimaryButton({
     super.key,
     required this.label,
     required this.onPressed,
     this.isLoading = false,
+    this.icon,
   });
 
-  /// Texto que se muestra en el botón.
   final String label;
 
-  /// Función que se ejecuta al pulsar.
-  /// Si es null, el botón queda deshabilitado.
+  /// Si es null (y no está cargando), el botón queda deshabilitado.
   final VoidCallback? onPressed;
-
-  /// Si es true, muestra un spinner y deshabilita el botón.
   final bool isLoading;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton(
-      // Si está cargando, onPressed se pone null para deshabilitar.
-      onPressed: isLoading ? null : onPressed,
-      style: FilledButton.styleFrom(
-        // Ancho completo y altura de 52.
-        minimumSize: const Size.fromHeight(52),
-        // Bordes redondeados.
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: FilledButton(
+        onPressed: isLoading ? () {} : onPressed,
+        child: isLoading
+            ? SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  color: scheme.onPrimary,
+                ),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 20),
+                    const SizedBox(width: 8),
+                  ],
+                  Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+                ],
+              ),
       ),
-      child: isLoading
-          // Mientras carga: spinner blanco chiquito.
-          ? const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          // Normal: texto del botón.
-          : Text(
-              label,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
     );
   }
 }

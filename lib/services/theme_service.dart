@@ -1,26 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-/// Servicio que controla el tema de la app (claro / oscuro).
-///
-/// Usa un [ValueNotifier] para que cualquier widget pueda "escuchar"
-/// los cambios de tema y reconstruirse automáticamente.
+/// Guarda el modo de tema elegido (sistema, claro u oscuro) y lo recuerda
+/// la próxima vez que se abra la app.
 class ThemeService {
-  // Constructor privado: no se puede instanciar la clase,
-  // todo se usa de forma estática.
   ThemeService._();
 
-  /// Modo de tema actual (light o dark).
-  static final ValueNotifier<ThemeMode> mode = ValueNotifier<ThemeMode>(
-    ThemeMode.light,
-  );
+  static const String _key = 'themeMode';
 
-  /// Alterna entre claro y oscuro.
-  static void toggle() {
-    mode.value = mode.value == ThemeMode.light
-        ? ThemeMode.dark
-        : ThemeMode.light;
+  static final ValueNotifier<ThemeMode> mode =
+      ValueNotifier<ThemeMode>(ThemeMode.system);
+
+  /// Lee la preferencia guardada. Llamar una vez al iniciar la app.
+  static Future<void> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      mode.value = switch (prefs.getString(_key)) {
+        'light' => ThemeMode.light,
+        'dark' => ThemeMode.dark,
+        _ => ThemeMode.system,
+      };
+    } catch (_) {
+      // Sin almacenamiento: se queda en "sistema".
+    }
   }
 
-  /// Atajo para saber si está en modo oscuro.
-  static bool get isDark => mode.value == ThemeMode.dark;
+  static void setMode(ThemeMode value) {
+    mode.value = value;
+    _save(value);
+  }
+
+  static Future<void> _save(ThemeMode value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_key, value.name);
+    } catch (_) {
+      // Si no se puede guardar, el cambio igual aplica en esta sesión.
+    }
+  }
 }

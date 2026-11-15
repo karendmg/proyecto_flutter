@@ -1,102 +1,250 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:proyecto_flutter/config/router.dart';
-import 'package:proyecto_flutter/data/mock_data.dart';
-import 'package:proyecto_flutter/services/auth_service.dart';
-import 'package:proyecto_flutter/services/portfolio_service.dart';
 
-/// Pestaña "Mi perfil".
-/// Muestra los datos del usuario, sus finanzas y opciones de la cuenta.
+import '../../config/router.dart';
+import '../../config/theme.dart';
+import '../../data/mock_data.dart';
+import '../../services/auth_service.dart';
+import '../../services/portfolio_service.dart';
+import '../../services/user_data_service.dart';
+import '../../widgets/currency_scope.dart';
+import '../../widgets/page_header.dart';
+import '../../widgets/tab_scroll_view.dart';
+
+/// Pestaña "Perfil": datos de la cuenta, resumen y opciones.
 class ProfileTab extends StatelessWidget {
   const ProfileTab({super.key});
 
+  Future<void> _confirmLogout(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cerrar sesión'),
+        content: const Text('¿Seguro que quieres salir de tu cuenta?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Salir'),
+          ),
+        ],
+      ),
+    );
+    // El router detecta que ya no hay sesión y vuelve solo al login.
+    if (ok == true) await AuthService.instance.salir();
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Escucha los cambios de autenticación (ej. cuando cierra sesión)
     return ListenableBuilder(
-      listenable: AuthService.instance,
+      listenable: Listenable.merge([
+        AuthService.instance,
+        PortfolioService.instance,
+        UserDataService.instance,
+      ]),
       builder: (context, _) {
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
         final auth = AuthService.instance;
+        final portfolio = PortfolioService.instance;
+        final user = UserDataService.instance;
+        final assets = kAssetItems;
+        final name = auth.userName;
 
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            const SizedBox(height: 12),
-
-            // ---------- AVATAR ----------
-            Center(
-              child: CircleAvatar(
-                radius: 46,
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                child: Text(
-                  // Toma la primera letra del nombre y la pone en mayúscula
-                  auth.userName.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 36,
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+        return TabScrollView(
+          slivers: [
+            const SliverToBoxAdapter(child: PageHeader(title: 'Perfil')),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  // ---------- Cabecera ----------
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 64,
+                            height: 64,
+                            alignment: Alignment.center,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: AppColors.heroGradient,
+                              ),
+                            ),
+                            child: Text(
+                              name.substring(0, 1).toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 28,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  auth.userEmail,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
+                  const SizedBox(height: 14),
 
-            // ---------- NOMBRE Y CORREO ----------
-            Center(
-              child: Text(
-                auth.userName,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              ),
-            ),
-            Center(child: Text(auth.userEmail)),
-            const SizedBox(height: 24),
+                  // ---------- Resumen ----------
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.account_balance_wallet_outlined,
+                          label: 'Efectivo',
+                          value: context.money(portfolio.cash),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.pie_chart_outline,
+                          label: 'Invertido',
+                          value: context.money(portfolio.investedValue(assets)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.menu_book_outlined,
+                          label: 'Lecturas',
+                          value: '${user.readCount} de ${kInfoItems.length}',
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.star_outline_rounded,
+                          label: 'Favoritos',
+                          value: '${user.favoritesCount}',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
 
-            // ---------- TARJETAS DE RESUMEN ----------
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.account_balance_wallet_outlined),
-                title: const Text('Efectivo'),
-                trailing: Text(
-                  '\$${PortfolioService.instance.cash.toStringAsFixed(2)}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
+                  // ---------- Opciones ----------
+                  Card(
+                    child: Column(
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.settings_outlined),
+                          title: const Text('Configuración'),
+                          subtitle: const Text('Moneda y apariencia'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => context.push(AppRoutes.settings),
+                        ),
+                        Divider(
+                          height: 1,
+                          indent: 16,
+                          endIndent: 16,
+                          color: scheme.outlineVariant.withValues(alpha: 0.5),
+                        ),
+                        ListTile(
+                          leading: Icon(Icons.logout, color: scheme.error),
+                          title: Text(
+                            'Cerrar sesión',
+                            style: TextStyle(color: scheme.error),
+                          ),
+                          onTap: () => _confirmLogout(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                ]),
               ),
-            ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.pie_chart_outline),
-                title: const Text('Valor invertido'),
-                trailing: Text(
-                  '\$${PortfolioService.instance.investedValue(kAssetItems).toStringAsFixed(2)}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // ---------- OPCIONES ----------
-            ListTile(
-              leading: const Icon(Icons.settings_outlined),
-              title: const Text('Configuración'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push(AppRoutes.settings),
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text('Cerrar sesión'),
-              onTap: () {
-                // 1. Limpiamos el estado de autenticación
-                AuthService.instance.logout();
-                // 2. Regresamos a la pantalla de login
-                context.go(AppRoutes.login);
-              },
             ),
           ],
         );
       },
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: theme.colorScheme.primary),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 2),
+            SizedBox(
+              width: double.infinity,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

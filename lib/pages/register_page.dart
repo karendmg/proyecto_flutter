@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:proyecto_flutter/config/router.dart';
-import 'package:proyecto_flutter/services/auth_service.dart';
-import 'package:proyecto_flutter/utils/validators.dart';
-import 'package:proyecto_flutter/widgets/app_primary_button.dart';
-import 'package:proyecto_flutter/widgets/app_text_field.dart';
+
+import '../config/router.dart';
+import '../services/auth_service.dart';
+import '../utils/validators.dart';
+import '../widgets/app_primary_button.dart';
+import '../widgets/app_text_field.dart';
+import '../widgets/auth_header.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -19,8 +21,8 @@ class _RegisterPageState extends State<RegisterPage> {
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
+  final _auth = AuthService.instance;
   bool _loading = false;
-  bool _showPass = false;
 
   @override
   void dispose() {
@@ -31,86 +33,101 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  void _goBack() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoutes.login);
+    }
+  }
+
+  Future<void> _register() async {
+    FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
-    await AuthService.instance.register(
-      _nameCtrl.text,
-      _emailCtrl.text,
-      _passCtrl.text,
-    );
-    if (!mounted) return;
-    setState(() => _loading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cuenta creada correctamente')),
-    );
-    context.go(AppRoutes.home);
+    try {
+      await _auth.registrar(_nameCtrl.text, _emailCtrl.text, _passCtrl.text);
+      // No hace falta navegar: el router detecta la sesión y abre /home.
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(_auth.mensajeError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Crear cuenta')),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  AppTextField(
-                    controller: _nameCtrl,
-                    label: 'Nombre completo',
-                    icon: Icons.person_outline,
-                    textInputAction: TextInputAction.next,
-                    validator: Validators.notEmpty,
-                  ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    controller: _emailCtrl,
-                    label: 'Correo electrónico',
-                    icon: Icons.email_outlined,
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    validator: Validators.email,
-                  ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    controller: _passCtrl,
-                    label: 'Contraseña',
-                    icon: Icons.lock_outline,
-                    obscureText: !_showPass,
-                    textInputAction: TextInputAction.next,
-                    validator: Validators.password,
-                  ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    controller: _confirmCtrl,
-                    label: 'Confirmar contraseña',
-                    icon: Icons.lock_reset,
-                    obscureText: !_showPass,
-                    textInputAction: TextInputAction.done,
-                    validator: Validators.confirmPassword(() => _passCtrl.text),
-                  ),
-                  const SizedBox(height: 8),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Mostrar contraseñas'),
-                    value: _showPass,
-                    onChanged: (v) => setState(() => _showPass = v),
-                  ),
-                  const SizedBox(height: 16),
-                  AppPrimaryButton(
-                    label: 'Registrarme',
-                    isLoading: _loading,
-                    onPressed: _submit,
-                  ),
-                ],
+      body: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        child: Column(
+          children: [
+            AuthHeader(
+              title: 'Crea tu cuenta',
+              subtitle: 'Recibe saldo virtual para practicar sin riesgo.',
+              onBack: _goBack,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AppTextField(
+                      label: 'Nombre',
+                      icon: Icons.person_outline,
+                      controller: _nameCtrl,
+                      validator: Validators.name,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.name],
+                    ),
+                    const SizedBox(height: 16),
+                    AppTextField(
+                      label: 'Correo',
+                      icon: Icons.mail_outline,
+                      controller: _emailCtrl,
+                      validator: Validators.email,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.email],
+                    ),
+                    const SizedBox(height: 16),
+                    AppTextField(
+                      label: 'Contraseña',
+                      icon: Icons.lock_outline,
+                      controller: _passCtrl,
+                      validator: Validators.password,
+                      obscureText: true,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.newPassword],
+                    ),
+                    const SizedBox(height: 16),
+                    AppTextField(
+                      label: 'Confirmar contraseña',
+                      icon: Icons.lock_outline,
+                      controller: _confirmCtrl,
+                      validator: (v) =>
+                          Validators.confirmPassword(v, _passCtrl.text),
+                      obscureText: true,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _register(),
+                    ),
+                    const SizedBox(height: 28),
+                    AppPrimaryButton(
+                      label: 'Crear cuenta',
+                      isLoading: _loading,
+                      onPressed: _register,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );

@@ -1,62 +1,103 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:proyecto_flutter/models/content_item.dart';
-import 'package:proyecto_flutter/pages/detail_page.dart';
-import 'package:proyecto_flutter/pages/home_page.dart';
-import 'package:proyecto_flutter/pages/login_page.dart';
-import 'package:proyecto_flutter/pages/register_page.dart';
-import 'package:proyecto_flutter/pages/settings_page.dart';
 
-/// Nombres de las rutas de la app.
-/// Centralizados aquí para evitar errores de tipeo.
+import '../models/content_item.dart';
+import '../pages/detail_page.dart';
+import '../pages/forgot_password_page.dart';
+import '../pages/home_page.dart';
+import '../pages/login_page.dart';
+import '../pages/register_page.dart';
+import '../pages/settings_page.dart';
+
 class AppRoutes {
-  static const login = '/';
-  static const register = '/register';
-  static const home = '/home';
-  static const detail = '/detail';
-  static const settings = '/settings';
+  AppRoutes._();
+
+  static const String login = '/login';
+  static const String register = '/register';
+  static const String forgotPassword = '/forgot-password';
+  static const String home = '/home';
+  static const String detail = '/detail';
+  static const String settings = '/settings';
+
+  /// Ruta de detalle de un elemento: /detail/a1
+  static String detailOf(String id) => '$detail/$id';
 }
 
-/// Configuración del router de la app.
-/// GoRouter se encarga de manejar la navegación declarativamente.
-final GoRouter appRouter = GoRouter(
-  // Ruta inicial al abrir la app
+/// Avisa al router cada vez que cambia la sesión (login / logout) para que
+/// vuelva a evaluar las redirecciones.
+class AuthRefresh extends ChangeNotifier {
+  AuthRefresh() {
+    FirebaseAuth.instance.authStateChanges().listen((_) => notifyListeners());
+  }
+}
+
+final authRefresh = AuthRefresh();
+
+final appRouter = GoRouter(
   initialLocation: AppRoutes.login,
+  refreshListenable: authRefresh,
+  redirect: (context, state) {
+    final logged = FirebaseAuth.instance.currentUser != null;
+    final loc = state.matchedLocation;
+    final goingAuth = loc == AppRoutes.login ||
+        loc == AppRoutes.register ||
+        loc == AppRoutes.forgotPassword;
 
+    if (!logged && !goingAuth) return AppRoutes.login;
+    if (logged && goingAuth) return AppRoutes.home;
+    return null;
+  },
+  errorBuilder: (context, state) => const _NotFoundPage(),
   routes: [
-    // ---------- LOGIN ----------
-    GoRoute(
-      path: AppRoutes.login,
-      // Sintaxis actualizada de go_router
-      builder: (context, state) => const LoginPage(),
-    ),
-
-    // ---------- REGISTRO ----------
+    GoRoute(path: AppRoutes.login, builder: (context, state) => const LoginPage()),
     GoRoute(
       path: AppRoutes.register,
       builder: (context, state) => const RegisterPage(),
     ),
-
-    // ---------- HOME (con los 4 tabs) ----------
     GoRoute(
-      path: AppRoutes.home,
-      builder: (context, state) => const HomePage(),
+      path: AppRoutes.forgotPassword,
+      builder: (context, state) => ForgotPasswordPage(
+        initialEmail: state.uri.queryParameters['email'] ?? '',
+      ),
     ),
-
-    // ---------- DETALLE (con ID en la URL) ----------
+    GoRoute(path: AppRoutes.home, builder: (context, state) => const HomePage()),
     GoRoute(
       path: '${AppRoutes.detail}/:id',
       builder: (context, state) {
-        // Aquí extraemos el ID y el objeto que viaja en el 'extra'
-        final id = state.pathParameters['id']!;
-        final extra = state.extra as ContentItem?;
-        return DetailPage(id: id, item: extra);
+        final id = state.pathParameters['id'] ?? '';
+        final extra = state.extra;
+        return DetailPage(id: id, item: extra is ContentItem ? extra : null);
       },
     ),
-
-    // ---------- CONFIGURACIÓN ----------
     GoRoute(
       path: AppRoutes.settings,
       builder: (context, state) => const SettingsPage(),
     ),
   ],
 );
+
+class _NotFoundPage extends StatelessWidget {
+  const _NotFoundPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.explore_off_outlined, size: 56),
+            const SizedBox(height: 12),
+            const Text('Esta página no existe'),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () => context.go(AppRoutes.home),
+              child: const Text('Ir al inicio'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

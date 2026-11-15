@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Necesario en release: Firebase y las imágenes usan internet.
+         (El manifest de debug ya lo traía, por eso en debug sí funcionaba.) -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
-        android:label="proyecto_flutter"
+        android:label="InverApp"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
